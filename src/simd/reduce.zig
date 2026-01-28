@@ -4,9 +4,9 @@ const std = @import("std");
 // SIMD Type Aliases (local copies to avoid circular imports)
 // =============================================================================
 
-const Vec4 = @Vector(4, f64);
-const VecLen: usize = 4;
-const VecAlign: usize = @alignOf(Vec4);
+const VecLen: usize = std.simd.suggestVectorLength(f64) orelse 1;
+const Vec = @Vector(VecLen, f64);
+const VecAlign: usize = @alignOf(Vec);
 
 fn alignPrefix(ptr: [*]const f64, len: usize) usize {
     if (len == 0) return 0;
@@ -35,7 +35,7 @@ fn alignPrefixPair(a_ptr: [*]const f64, b_ptr: [*]const f64, len: usize) usize {
 // SIMD Reduction Helpers
 //
 // These provide reusable reduction patterns using explicit SIMD vectorization.
-// All functions follow the pattern: SIMD loop (4 elements) + scalar tail.
+// All functions follow the pattern: SIMD loop (VecLen elements) + scalar tail.
 // =============================================================================
 
 /// Sum of array elements: Σ(x)
@@ -53,21 +53,22 @@ pub fn sum(ptr: [*]const f64, len: usize) f64 {
     const aligned_len = len - i;
     const base: [*]align(VecAlign) const f64 = @alignCast(ptr + i);
 
-    var acc0: Vec4 = @splat(0.0);
-    var acc1: Vec4 = @splat(0.0);
+    var acc0: Vec = @splat(0.0);
+    var acc1: Vec = @splat(0.0);
     var j: usize = 0;
+    const step = VecLen * 2;
 
     // SIMD loop: unroll by 2 to improve ILP.
-    while (j + 8 <= aligned_len) : (j += 8) {
-        const v0: Vec4 = base[j..][0..4].*;
-        const v1: Vec4 = base[j + 4 ..][0..4].*;
+    while (j + step <= aligned_len) : (j += step) {
+        const v0: Vec = base[j..][0..VecLen].*;
+        const v1: Vec = base[j + VecLen ..][0..VecLen].*;
         acc0 += v0;
         acc1 += v1;
     }
 
-    var acc: Vec4 = acc0 + acc1;
-    while (j + 4 <= aligned_len) : (j += 4) {
-        const v: Vec4 = base[j..][0..4].*;
+    var acc: Vec = acc0 + acc1;
+    while (j + VecLen <= aligned_len) : (j += VecLen) {
+        const v: Vec = base[j..][0..VecLen].*;
         acc += v;
     }
 
@@ -97,22 +98,23 @@ pub fn sumSq(ptr: [*]const f64, len: usize) f64 {
     const aligned_len = len - i;
     const base: [*]align(VecAlign) const f64 = @alignCast(ptr + i);
 
-    var acc0: Vec4 = @splat(0.0);
-    var acc1: Vec4 = @splat(0.0);
+    var acc0: Vec = @splat(0.0);
+    var acc1: Vec = @splat(0.0);
     var j: usize = 0;
+    const step = VecLen * 2;
 
     // SIMD loop: unroll by 2 to improve ILP and enable FMA.
-    while (j + 8 <= aligned_len) : (j += 8) {
-        const v0: Vec4 = base[j..][0..4].*;
-        const v1: Vec4 = base[j + 4 ..][0..4].*;
-        acc0 = @mulAdd(Vec4, v0, v0, acc0);
-        acc1 = @mulAdd(Vec4, v1, v1, acc1);
+    while (j + step <= aligned_len) : (j += step) {
+        const v0: Vec = base[j..][0..VecLen].*;
+        const v1: Vec = base[j + VecLen ..][0..VecLen].*;
+        acc0 = @mulAdd(Vec, v0, v0, acc0);
+        acc1 = @mulAdd(Vec, v1, v1, acc1);
     }
 
-    var acc: Vec4 = acc0 + acc1;
-    while (j + 4 <= aligned_len) : (j += 4) {
-        const v: Vec4 = base[j..][0..4].*;
-        acc = @mulAdd(Vec4, v, v, acc);
+    var acc: Vec = acc0 + acc1;
+    while (j + VecLen <= aligned_len) : (j += VecLen) {
+        const v: Vec = base[j..][0..VecLen].*;
+        acc = @mulAdd(Vec, v, v, acc);
     }
 
     result += @reduce(.Add, acc);
@@ -145,24 +147,25 @@ pub fn dot(a_ptr: [*]const f64, b_ptr: [*]const f64, len: usize) f64 {
     if (a_aligned and b_aligned) {
         const a_base: [*]align(VecAlign) const f64 = @alignCast(a_ptr + i);
         const b_base: [*]align(VecAlign) const f64 = @alignCast(b_ptr + i);
-        var acc0: Vec4 = @splat(0.0);
-        var acc1: Vec4 = @splat(0.0);
+        var acc0: Vec = @splat(0.0);
+        var acc1: Vec = @splat(0.0);
         var j: usize = 0;
+        const step = VecLen * 2;
 
-        while (j + 8 <= remaining) : (j += 8) {
-            const va0: Vec4 = a_base[j..][0..4].*;
-            const vb0: Vec4 = b_base[j..][0..4].*;
-            const va1: Vec4 = a_base[j + 4 ..][0..4].*;
-            const vb1: Vec4 = b_base[j + 4 ..][0..4].*;
-            acc0 = @mulAdd(Vec4, va0, vb0, acc0);
-            acc1 = @mulAdd(Vec4, va1, vb1, acc1);
+        while (j + step <= remaining) : (j += step) {
+            const va0: Vec = a_base[j..][0..VecLen].*;
+            const vb0: Vec = b_base[j..][0..VecLen].*;
+            const va1: Vec = a_base[j + VecLen ..][0..VecLen].*;
+            const vb1: Vec = b_base[j + VecLen ..][0..VecLen].*;
+            acc0 = @mulAdd(Vec, va0, vb0, acc0);
+            acc1 = @mulAdd(Vec, va1, vb1, acc1);
         }
 
-        var acc: Vec4 = acc0 + acc1;
-        while (j + 4 <= remaining) : (j += 4) {
-            const va: Vec4 = a_base[j..][0..4].*;
-            const vb: Vec4 = b_base[j..][0..4].*;
-            acc = @mulAdd(Vec4, va, vb, acc);
+        var acc: Vec = acc0 + acc1;
+        while (j + VecLen <= remaining) : (j += VecLen) {
+            const va: Vec = a_base[j..][0..VecLen].*;
+            const vb: Vec = b_base[j..][0..VecLen].*;
+            acc = @mulAdd(Vec, va, vb, acc);
         }
 
         result += @reduce(.Add, acc);
@@ -174,24 +177,25 @@ pub fn dot(a_ptr: [*]const f64, b_ptr: [*]const f64, len: usize) f64 {
     }
 
     // Unaligned path.
-    var acc0: Vec4 = @splat(0.0);
-    var acc1: Vec4 = @splat(0.0);
+    var acc0: Vec = @splat(0.0);
+    var acc1: Vec = @splat(0.0);
     var j: usize = 0;
+    const step = VecLen * 2;
 
-    while (j + 8 <= remaining) : (j += 8) {
-        const va0: Vec4 = a_ptr[i + j ..][0..4].*;
-        const vb0: Vec4 = b_ptr[i + j ..][0..4].*;
-        const va1: Vec4 = a_ptr[i + j + 4 ..][0..4].*;
-        const vb1: Vec4 = b_ptr[i + j + 4 ..][0..4].*;
-        acc0 = @mulAdd(Vec4, va0, vb0, acc0);
-        acc1 = @mulAdd(Vec4, va1, vb1, acc1);
+    while (j + step <= remaining) : (j += step) {
+        const va0: Vec = a_ptr[i + j ..][0..VecLen].*;
+        const vb0: Vec = b_ptr[i + j ..][0..VecLen].*;
+        const va1: Vec = a_ptr[i + j + VecLen ..][0..VecLen].*;
+        const vb1: Vec = b_ptr[i + j + VecLen ..][0..VecLen].*;
+        acc0 = @mulAdd(Vec, va0, vb0, acc0);
+        acc1 = @mulAdd(Vec, va1, vb1, acc1);
     }
 
-    var acc: Vec4 = acc0 + acc1;
-    while (j + 4 <= remaining) : (j += 4) {
-        const va: Vec4 = a_ptr[i + j ..][0..4].*;
-        const vb: Vec4 = b_ptr[i + j ..][0..4].*;
-        acc = @mulAdd(Vec4, va, vb, acc);
+    var acc: Vec = acc0 + acc1;
+    while (j + VecLen <= remaining) : (j += VecLen) {
+        const va: Vec = a_ptr[i + j ..][0..VecLen].*;
+        const vb: Vec = b_ptr[i + j ..][0..VecLen].*;
+        acc = @mulAdd(Vec, va, vb, acc);
     }
 
     result += @reduce(.Add, acc);
