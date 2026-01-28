@@ -22,10 +22,12 @@ uv sync --group dev
 uv run pytest tests/
 
 # Run a single Python test
-uv run pytest tests/test_zigops.py::TestSumSq::test_basic -v
+uv run pytest tests/test_snake.py::test_sum_sq -v
 
 # Run benchmarks
 uv run python bench/bench.py
+uv run python bench/llm_bench.py      # LLM-oriented microbenchmarks
+uv run python bench/micro_reduce.py   # Reduction kernel benchmarks
 
 # Lint and format Python code
 uv run ruff check python/
@@ -54,9 +56,30 @@ numpy.ndarray → ctypes.POINTER(c_double) → Zig kernel (SIMD) → return valu
 
 The GIL is automatically released during ctypes foreign function calls.
 
+### Zig Module Structure
+
+```
+src/
+├── snake.zig           # Root module with C ABI exports
+├── simd/
+│   ├── simd.zig        # SIMD type aliases (Vec4) and helpers
+│   └── reduce.zig      # Core SIMD reduction patterns (sum, sumSq, dot)
+├── kernels/
+│   ├── kernels.zig     # Re-exports all kernel modules
+│   ├── reductions.zig  # sum_sq, dot, variance, argmax
+│   ├── transforms.zig  # clip, scale, normalize, saxpy
+│   ├── activations.zig # relu, gelu, softmax
+│   ├── prefix.zig      # cumsum, rolling_sum
+│   └── histogram.zig   # histogram
+└── threading/
+    └── threading.zig   # Multi-threaded variants (sum_sq_mt, softmax_mt)
+```
+
 ### Key Components
 
-- **src/zigops.zig**: Core Zig kernels using `@Vector(4, f64)` for explicit SIMD. Exports C ABI functions (`sum_sq_f64`, `dot_f64`, `clip_f64`, `argmax_f64`, `sum_sq_f64_mt`).
+- **src/snake.zig**: Root module that exports C ABI functions. All kernels are thin wrappers delegating to the `kernels/` and `threading/` submodules.
+
+- **src/simd/reduce.zig**: Core SIMD reduction helpers using `@Vector(4, f64)`. Handles memory alignment and loop unrolling (2x unroll for ILP).
 
 - **python/snake/\_core.py**: ctypes bindings that load `libsnake.so`, define function signatures, and convert NumPy arrays to `(ptr, len)` tuples via `_as_f64_ptr()`.
 
@@ -64,12 +87,14 @@ The GIL is automatically released during ctypes foreign function calls.
 
 ### Multi-threading
 
-`sum_sq_f64_mt` spawns up to 64 worker threads, each computing a partial sum on a chunk. Falls back to single-threaded for arrays < 1M elements.
+`sum_sq_f64_mt` and `softmax_f64_mt` spawn worker threads, each computing a partial result on a chunk. Falls back to single-threaded for small arrays.
 
 ### SIMD Pattern
 
-All kernels follow the same structure:
+Reduction kernels in `src/simd/reduce.zig` follow an optimized structure:
 
-1. SIMD loop processing 4 elements per iteration via `@Vector(4, f64)`
-2. Scalar tail loop for remaining 0-3 elements
-3. `@reduce(.Add, acc)` for horizontal reduction
+1. **Alignment prefix**: Scalar loop to reach vector-aligned memory boundary
+2. **Unrolled SIMD loop**: Process 8 elements per iteration (2×Vec4) using `@mulAdd` for FMA
+3. **SIMD cleanup**: Process remaining 4-element chunks
+4. **Horizontal reduce**: `@reduce(.Add, acc)` to collapse vector to scalar
+5. **Scalar tail**: Handle remaining 0-3 elements
