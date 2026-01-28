@@ -29,10 +29,29 @@ result = sum_sq(a)        # SIMD single-thread
 result = sum_sq_mt(a)     # Multi-threaded
 ```
 
+## Kernels
+
+Core kernels:
+
+- sum_sq, sum_sq_mt, dot, clip, argmax
+
+Phase 1 kernels:
+
+- normalize, scale, saxpy
+- relu, gelu, softmax
+- cumsum, rolling_sum
+- variance, histogram
+
 ## Benchmarks
 
 ```bash
 python bench/bench.py
+```
+
+LLM-oriented microbenchmarks (Layer A):
+
+```bash
+python bench/llm_bench.py
 ```
 
 | Function    | vs Python loop | vs NumPy             |

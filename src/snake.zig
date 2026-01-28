@@ -1,172 +1,153 @@
-const std = @import("std");
+// =============================================================================
+// Snake - SIMD-Vectorized Numeric Operations
+// =============================================================================
+//
+// Root module that provides the C ABI interface and internal modules.
+//
+// Module Structure:
+//   src/
+//   ├── snake.zig           # This file - root module with C ABI exports
+//   ├── simd/
+//   │   └── simd.zig        # SIMD type aliases and helpers
+//   ├── kernels/
+//   │   ├── kernels.zig     # Re-exports all kernel modules
+//   │   ├── reductions.zig  # sum_sq, dot, variance, argmax
+//   │   ├── transforms.zig  # clip, scale, normalize, saxpy
+//   │   ├── activations.zig # relu, gelu, softmax
+//   │   ├── prefix.zig      # cumsum, rolling_sum
+//   │   └── histogram.zig   # histogram
+//   └── threading/
+//       └── threading.zig   # Multi-threaded variants
+//
+// =============================================================================
+
+// Internal modules (for direct Zig usage)
+pub const simd = @import("simd/simd.zig");
+pub const kernels = @import("kernels/kernels.zig");
+pub const threading = @import("threading/threading.zig");
 
 // =============================================================================
-// SIMD Configuration
-// =============================================================================
-
-const Vec4 = @Vector(4, f64);
-
-// =============================================================================
-// Core Kernels - Single Threaded
+// C ABI Exports - Reduction Kernels
 // =============================================================================
 
 /// Sum of squares: Σ(x²)
-/// Uses explicit SIMD for guaranteed vectorization.
 pub export fn sum_sq_f64(ptr: [*]const f64, len: usize) f64 {
-    return sumSqSimd(ptr, len);
-}
-
-fn sumSqSimd(ptr: [*]const f64, len: usize) f64 {
-    var acc: Vec4 = @splat(0.0);
-    var i: usize = 0;
-
-    // SIMD loop: process 4 elements at a time
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        acc += v * v;
-    }
-
-    // Reduce SIMD accumulator
-    var sum = @reduce(.Add, acc);
-
-    // Scalar tail: remaining elements
-    while (i < len) : (i += 1) {
-        sum += ptr[i] * ptr[i];
-    }
-
-    return sum;
+    return kernels.reductions.sumSq(ptr, len);
 }
 
 /// Dot product: Σ(a · b)
 pub export fn dot_f64(a_ptr: [*]const f64, b_ptr: [*]const f64, len: usize) f64 {
-    var acc: Vec4 = @splat(0.0);
-    var i: usize = 0;
-
-    while (i + 4 <= len) : (i += 4) {
-        const va: Vec4 = a_ptr[i..][0..4].*;
-        const vb: Vec4 = b_ptr[i..][0..4].*;
-        acc += va * vb;
-    }
-
-    var sum = @reduce(.Add, acc);
-
-    while (i < len) : (i += 1) {
-        sum += a_ptr[i] * b_ptr[i];
-    }
-
-    return sum;
-}
-
-/// Clip values in-place to [lo, hi]
-pub export fn clip_f64(ptr: [*]f64, len: usize, lo: f64, hi: f64) void {
-    for (0..len) |i| {
-        const x = ptr[i];
-        ptr[i] = @max(lo, @min(hi, x));
-    }
+    return kernels.reductions.dot(a_ptr, b_ptr, len);
 }
 
 /// Find index of maximum value
 pub export fn argmax_f64(ptr: [*]const f64, len: usize) usize {
-    if (len == 0) return 0;
+    return kernels.reductions.argmax(ptr, len);
+}
 
-    var max_idx: usize = 0;
-    var max_val: f64 = ptr[0];
-
-    for (1..len) |i| {
-        if (ptr[i] > max_val) {
-            max_val = ptr[i];
-            max_idx = i;
-        }
-    }
-
-    return max_idx;
+/// Variance using Welford's online algorithm
+pub export fn variance_f64(ptr: [*]const f64, len: usize) f64 {
+    return kernels.reductions.variance(ptr, len);
 }
 
 // =============================================================================
-// Multi-Threaded Variants
+// C ABI Exports - Transform Kernels
 // =============================================================================
 
-fn sumSqWorker(ptr: [*]const f64, start: usize, end: usize, out: *f64) void {
-    out.* = sumSqSimd(ptr + start, end - start);
+/// Clip values in-place to [lo, hi]
+pub export fn clip_f64(ptr: [*]f64, len: usize, lo: f64, hi: f64) void {
+    kernels.transforms.clip(ptr, len, lo, hi);
 }
+
+/// L2 normalize in-place
+pub export fn normalize_f64(ptr: [*]f64, len: usize) void {
+    kernels.transforms.normalize(ptr, len);
+}
+
+/// Multiply array by scalar in-place
+pub export fn scale_f64(ptr: [*]f64, len: usize, scalar: f64) void {
+    kernels.transforms.scale(ptr, len, scalar);
+}
+
+/// SAXPY: a[i] += scalar * b[i]
+pub export fn saxpy_f64(a_ptr: [*]f64, b_ptr: [*]const f64, len: usize, scalar: f64) void {
+    kernels.transforms.saxpy(a_ptr, b_ptr, len, scalar);
+}
+
+// =============================================================================
+// C ABI Exports - Activation Kernels
+// =============================================================================
+
+/// ReLU activation in-place
+pub export fn relu_f64(ptr: [*]f64, len: usize) void {
+    kernels.activations.relu(ptr, len);
+}
+
+/// GELU activation in-place using tanh approximation
+pub export fn gelu_f64(ptr: [*]f64, len: usize) void {
+    kernels.activations.gelu(ptr, len);
+}
+
+/// Softmax activation in-place
+pub export fn softmax_f64(ptr: [*]f64, len: usize) void {
+    kernels.activations.softmax(ptr, len);
+}
+
+// =============================================================================
+// C ABI Exports - Prefix/Rolling Kernels
+// =============================================================================
+
+/// Cumulative sum (prefix sum) in-place
+pub export fn cumsum_f64(ptr: [*]f64, len: usize) void {
+    kernels.prefix.cumsum(ptr, len);
+}
+
+/// Rolling sum with fixed window size
+pub export fn rolling_sum_f64(
+    in_ptr: [*]const f64,
+    out_ptr: [*]f64,
+    len: usize,
+    window: usize,
+) void {
+    kernels.prefix.rollingSum(in_ptr, out_ptr, len, window);
+}
+
+// =============================================================================
+// C ABI Exports - Histogram Kernel
+// =============================================================================
+
+/// Binned histogram
+pub export fn histogram_f64(
+    data_ptr: [*]const f64,
+    len: usize,
+    bins_ptr: [*]f64,
+    n_bins: usize,
+    min_val: f64,
+    max_val: f64,
+) void {
+    kernels.histogram.histogram(data_ptr, len, bins_ptr, n_bins, min_val, max_val);
+}
+
+// =============================================================================
+// C ABI Exports - Multi-Threaded Kernels
+// =============================================================================
 
 /// Multi-threaded sum of squares
-/// n_threads = 0 means auto-detect CPU count
-pub export fn sum_sq_f64_mt(ptr: [*]const f64, len: usize, n_threads_in: u32) f64 {
-    var n_threads: u32 = n_threads_in;
+pub export fn sum_sq_f64_mt(ptr: [*]const f64, len: usize, n_threads: u32) f64 {
+    return threading.sumSqMt(ptr, len, n_threads);
+}
 
-    if (n_threads == 0) {
-        n_threads = @intCast(std.Thread.getCpuCount() catch 1);
-    }
-
-    // Fall back to single-threaded for small arrays or single thread
-    if (n_threads < 2 or len < 1_000_000) {
-        return sumSqSimd(ptr, len);
-    }
-
-    if (n_threads > 64) n_threads = 64;
-
-    var partial: [64]f64 = [_]f64{0.0} ** 64;
-    var handles: [64]?std.Thread = [_]?std.Thread{null} ** 64;
-
-    const chunk: usize = len / n_threads;
-
-    // Spawn worker threads
-    for (0..n_threads) |t| {
-        const start = t * chunk;
-        const end = if (t == n_threads - 1) len else start + chunk;
-
-        handles[t] = std.Thread.spawn(.{}, sumSqWorker, .{ ptr, start, end, &partial[t] }) catch null;
-
-        if (handles[t] == null) {
-            // Fallback: run in current thread if spawn fails
-            sumSqWorker(ptr, start, end, &partial[t]);
-        }
-    }
-
-    // Join all threads
-    for (0..n_threads) |t| {
-        if (handles[t]) |h| h.join();
-    }
-
-    // Sum partial results
-    var sum: f64 = 0.0;
-    for (0..n_threads) |t| {
-        sum += partial[t];
-    }
-
-    return sum;
+/// Multi-threaded softmax activation in-place
+pub export fn softmax_f64_mt(ptr: [*]f64, len: usize, n_threads: u32) void {
+    threading.softmaxMt(ptr, len, n_threads);
 }
 
 // =============================================================================
-// Tests
+// Test imports - ensures all module tests are run
 // =============================================================================
 
-test "sum_sq_f64 basic" {
-    const data = [_]f64{ 1.0, 2.0, 3.0, 4.0 };
-    const result = sum_sq_f64(&data, data.len);
-    try std.testing.expectApproxEqAbs(@as(f64, 30.0), result, 1e-10);
-}
-
-test "dot_f64 basic" {
-    const a = [_]f64{ 1.0, 2.0, 3.0, 4.0 };
-    const b = [_]f64{ 2.0, 3.0, 4.0, 5.0 };
-    const result = dot_f64(&a, &b, a.len);
-    // 1*2 + 2*3 + 3*4 + 4*5 = 2 + 6 + 12 + 20 = 40
-    try std.testing.expectApproxEqAbs(@as(f64, 40.0), result, 1e-10);
-}
-
-test "clip_f64 basic" {
-    var data = [_]f64{ -1.0, 0.5, 1.5, 3.0 };
-    clip_f64(&data, data.len, 0.0, 1.0);
-    try std.testing.expectApproxEqAbs(@as(f64, 0.0), data[0], 1e-10);
-    try std.testing.expectApproxEqAbs(@as(f64, 0.5), data[1], 1e-10);
-    try std.testing.expectApproxEqAbs(@as(f64, 1.0), data[2], 1e-10);
-    try std.testing.expectApproxEqAbs(@as(f64, 1.0), data[3], 1e-10);
-}
-
-test "argmax_f64 basic" {
-    const data = [_]f64{ 1.0, 4.0, 2.0, 3.0 };
-    const result = argmax_f64(&data, data.len);
-    try std.testing.expectEqual(@as(usize, 1), result);
+test {
+    _ = simd;
+    _ = kernels;
+    _ = threading;
 }

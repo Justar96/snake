@@ -36,6 +36,16 @@ snake provides high-performance numeric kernels written in Zig, callable from Py
 │  • dot_f64(a, b, len) -> f64                                │
 │  • clip_f64(ptr, len, lo, hi) -> void                       │
 │  • argmax_f64(ptr, len) -> usize                            │
+│  • normalize_f64(ptr, len) -> void                          │
+│  • scale_f64(ptr, len, scalar) -> void                      │
+│  • saxpy_f64(a, b, len, scalar) -> void                     │
+│  • relu_f64(ptr, len) -> void                               │
+│  • gelu_f64(ptr, len) -> void                               │
+│  • softmax_f64(ptr, len) -> void                            │
+│  • cumsum_f64(ptr, len) -> void                             │
+│  • rolling_sum_f64(in, out, len, window) -> void            │
+│  • variance_f64(ptr, len) -> f64                            │
+│  • histogram_f64(data, len, bins, n_bins, min, max) -> void │
 ├─────────────────────────────────────────────────────────────┤
 │  Internal:                                                   │
 │  • @Vector(4, f64) SIMD primitives                          │

@@ -37,5 +37,7 @@ htmlcov/
 
 # Benchmark results
 *.json
+!bench/fixtures/bpe_demo.json
+!bench/fixtures/tokenizer_vocab.json
 
 .claude/*

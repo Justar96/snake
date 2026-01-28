@@ -1,0 +1,8 @@
+<BOS> the quick brown fox jumps over the lazy dog . <EOS>
+token stream vector cache model decode sample .
+the model decode stream ; sample token ?
+cache vector token stream , model decode !
+the quick sample token ; the lazy dog .
+brown fox jumps over the lazy dog !
+decode token stream vector ; cache model .
+<BOS> sample token stream <EOS>

@@ -164,3 +164,66 @@ python bench/bench.py
 sudo python -m pyperf system tune
 python bench/bench.py --rigorous
 ```
+
+Phase 1 kernels are included in `bench/bench.py` by default. To skip them:
+
+```bash
+python bench/bench.py --skip-phase1
+```
+
+Phase 1 kernels currently benchmarked:
+
+- normalize, scale, saxpy
+- relu, gelu, softmax
+- cumsum, rolling_sum
+- variance, histogram
+
+## LLM-Oriented Benchmarks (Layer A)
+
+This suite targets CPU-side workloads that show up in real Python inference
+stacks and are good candidates for Zig acceleration.
+
+Current microkernels (Python/NumPy baselines):
+
+- sample_token: top-k/top-p selection + repetition penalty on a bounded window
+- cosine similarity: exact brute force and candidate-list scoring
+- KV-cache ring buffer: contiguous writes into preallocated buffers
+- tokenizer: realistic pretokenization + demo BPE merge loop (Python baseline)
+
+Tokenizer fixtures:
+
+- `bench/fixtures/bpe_demo.json` provides a fixed merges list for stable results.
+- `bench/fixtures/tokenizer_vocab.json` + `bench/fixtures/tokenizer_merges.txt` are
+  the fixed Rust BPE fixtures used by the baseline.
+- `bench/fixtures/tokenizer_corpus.txt` is the deterministic corpus used to
+  generate those fixtures.
+
+Run the suite:
+
+```bash
+python bench/llm_bench.py
+
+# Sample-token only
+python bench/llm_bench.py --kernel sample_token --vocab-sizes 32000,128000 --batch-sizes 1,8
+
+# Candidate-list cosine scoring
+python bench/llm_bench.py --kernel cosine_candidates --corpus-sizes 10000 --candidate-k 1000
+
+# Tokenizer microbench (optional Rust baseline if `tokenizers` is installed)
+python bench/llm_bench.py --kernel tokenizer --text-lengths 128,1024,4096 --tokenizer-batch 8
+```
+
+Optional Rust ceiling baseline:
+
+- Install `tokenizers` to enable the Rust tokenizer comparison
+  (`pip install tokenizers` or `uv pip install tokenizers`)
+- The Rust baseline loads fixed fixtures from `bench/fixtures/`.
+
+Metric definitions used by the suite:
+
+- TTFT: Time to first token (includes tokenization and the first decode step)
+- TPOT: Time per output token (steady-state per-token latency)
+- TPS: Tokens per second throughput (tokens / elapsed time)
+
+Note: The current script reports TPOT-style timings for the microkernels only.
+Layer B (decode step) and Layer C (serving harness) are tracked separately.

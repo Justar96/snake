@@ -61,6 +61,65 @@ _lib.clip_f64.restype = None
 _lib.argmax_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
 _lib.argmax_f64.restype = ctypes.c_size_t
 
+# New Phase 1 kernels
+_lib.normalize_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.normalize_f64.restype = None
+
+_lib.scale_f64.argtypes = [
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_double,
+]
+_lib.scale_f64.restype = None
+
+_lib.saxpy_f64.argtypes = [
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_double,
+]
+_lib.saxpy_f64.restype = None
+
+_lib.relu_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.relu_f64.restype = None
+
+_lib.gelu_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.gelu_f64.restype = None
+
+_lib.softmax_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.softmax_f64.restype = None
+
+_lib.softmax_f64_mt.argtypes = [
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_uint32,
+]
+_lib.softmax_f64_mt.restype = None
+
+_lib.cumsum_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.cumsum_f64.restype = None
+
+_lib.rolling_sum_f64.argtypes = [
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_size_t,
+]
+_lib.rolling_sum_f64.restype = None
+
+_lib.variance_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+_lib.variance_f64.restype = ctypes.c_double
+
+_lib.histogram_f64.argtypes = [
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_double,
+    ctypes.c_double,
+]
+_lib.histogram_f64.restype = None
+
 
 def _as_f64_ptr(arr: NDArray) -> tuple:
     """Convert numpy array to (pointer, length, array) tuple."""
@@ -102,3 +161,100 @@ def argmax(a: NDArray) -> int:
     """Find index of maximum value."""
     ptr, size, _ = _as_f64_ptr(a)
     return int(_lib.argmax_f64(ptr, size))
+
+
+# =============================================================================
+# Phase 1 Kernels
+# =============================================================================
+
+
+def normalize(a: NDArray) -> NDArray:
+    """L2 normalize in-place: x[i] /= sqrt(Σx²)."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.normalize_f64(ptr, a.size)
+    return a
+
+
+def scale(a: NDArray, scalar: float) -> NDArray:
+    """Multiply array by scalar in-place: x[i] *= s."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.scale_f64(ptr, a.size, float(scalar))
+    return a
+
+
+def saxpy(a: NDArray, b: NDArray, scalar: float) -> NDArray:
+    """SAXPY: a[i] += scalar * b[i]. Modifies a in-place."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr_a = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    ptr_b, size_b, _ = _as_f64_ptr(b)
+    if a.size != size_b:
+        raise ValueError(f"Arrays must have same length: {a.size} != {size_b}")
+    _lib.saxpy_f64(ptr_a, ptr_b, a.size, float(scalar))
+    return a
+
+
+def relu(a: NDArray) -> NDArray:
+    """ReLU activation in-place: x[i] = max(0, x[i])."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.relu_f64(ptr, a.size)
+    return a
+
+
+def gelu(a: NDArray) -> NDArray:
+    """GELU activation in-place using tanh approximation."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.gelu_f64(ptr, a.size)
+    return a
+
+
+def softmax(a: NDArray) -> NDArray:
+    """Softmax activation in-place: exp(x[i]) / Σexp(x)."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.softmax_f64(ptr, a.size)
+    return a
+
+
+def softmax_mt(a: NDArray, n_threads: int = 0) -> NDArray:
+    """Multi-threaded softmax activation in-place (0 = auto-detect cores)."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.softmax_f64_mt(ptr, a.size, int(n_threads))
+    return a
+
+
+def cumsum(a: NDArray) -> NDArray:
+    """Cumulative sum (prefix sum) in-place."""
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    ptr = a.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.cumsum_f64(ptr, a.size)
+    return a
+
+
+def rolling_sum(a: NDArray, window: int) -> NDArray:
+    """Rolling sum with fixed window size."""
+    a_in = np.ascontiguousarray(a, dtype=np.float64)
+    a_out = np.empty_like(a_in)
+    ptr_in = a_in.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    ptr_out = a_out.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.rolling_sum_f64(ptr_in, ptr_out, a_in.size, int(window))
+    return a_out
+
+
+def variance(a: NDArray) -> float:
+    """Population variance using Welford's algorithm."""
+    ptr, size, _ = _as_f64_ptr(a)
+    return float(_lib.variance_f64(ptr, size))
+
+
+def histogram(a: NDArray, n_bins: int, min_val: float, max_val: float) -> NDArray:
+    """Compute binned histogram. Returns array of bin counts."""
+    ptr_a, size_a, _ = _as_f64_ptr(a)
+    bins = np.zeros(n_bins, dtype=np.float64)
+    ptr_bins = bins.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    _lib.histogram_f64(ptr_a, size_a, ptr_bins, n_bins, float(min_val), float(max_val))
+    return bins

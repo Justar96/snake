@@ -10,7 +10,24 @@ from pathlib import Path
 # Add parent to path for development
 sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
 
-from snake import sum_sq, sum_sq_mt, dot, clip, argmax
+from snake import (
+    argmax,
+    clip,
+    cumsum,
+    dot,
+    gelu,
+    histogram,
+    normalize,
+    relu,
+    rolling_sum,
+    saxpy,
+    scale,
+    softmax,
+    softmax_mt,
+    sum_sq,
+    sum_sq_mt,
+    variance,
+)
 
 
 class TestSumSq:
@@ -151,6 +168,159 @@ class TestDtypeConversion:
         result = sum_sq(a)
         expected = 30.0
         assert abs(result - expected) < 1e-10
+
+
+class TestNormalize:
+    def test_basic(self):
+        a = np.array([3.0, 4.0])
+        result = normalize(a.copy())
+        # L2 norm = 5, normalized = [0.6, 0.8]
+        np.testing.assert_array_almost_equal(result, [0.6, 0.8])
+
+    def test_unit_vector(self):
+        a = np.array([1.0, 0.0, 0.0])
+        result = normalize(a.copy())
+        np.testing.assert_array_almost_equal(result, [1.0, 0.0, 0.0])
+
+    def test_matches_numpy(self):
+        rng = np.random.default_rng(42)
+        a = rng.random(1000)
+        result = normalize(a.copy())
+        expected = a / np.linalg.norm(a)
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestScale:
+    def test_basic(self):
+        a = np.array([1.0, 2.0, 3.0, 4.0])
+        result = scale(a.copy(), 2.0)
+        np.testing.assert_array_almost_equal(result, [2.0, 4.0, 6.0, 8.0])
+
+    def test_matches_numpy(self):
+        rng = np.random.default_rng(42)
+        a = rng.random(1000)
+        scalar = 3.14
+        result = scale(a.copy(), scalar)
+        expected = a * scalar
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestSaxpy:
+    def test_basic(self):
+        a = np.array([1.0, 2.0, 3.0, 4.0])
+        b = np.array([1.0, 1.0, 1.0, 1.0])
+        result = saxpy(a.copy(), b, 2.0)
+        np.testing.assert_array_almost_equal(result, [3.0, 4.0, 5.0, 6.0])
+
+    def test_length_mismatch(self):
+        a = np.array([1.0, 2.0, 3.0])
+        b = np.array([1.0, 2.0])
+        with pytest.raises(ValueError):
+            saxpy(a.copy(), b, 1.0)
+
+
+class TestRelu:
+    def test_basic(self):
+        a = np.array([-2.0, -1.0, 0.0, 1.0, 2.0])
+        result = relu(a.copy())
+        np.testing.assert_array_almost_equal(result, [0.0, 0.0, 0.0, 1.0, 2.0])
+
+    def test_matches_numpy(self):
+        rng = np.random.default_rng(42)
+        a = rng.random(1000) * 2 - 1  # Range [-1, 1]
+        result = relu(a.copy())
+        expected = np.maximum(0, a)
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestGelu:
+    def test_zero(self):
+        a = np.array([0.0])
+        result = gelu(a.copy())
+        assert abs(result[0]) < 1e-6
+
+    def test_positive(self):
+        a = np.array([1.0])
+        result = gelu(a.copy())
+        # GELU(1) ≈ 0.841
+        assert abs(result[0] - 0.841) < 0.01
+
+
+class TestSoftmax:
+    def test_basic(self):
+        a = np.array([1.0, 2.0, 3.0])
+        result = softmax(a.copy())
+        # Sum should be 1
+        assert abs(result.sum() - 1.0) < 1e-10
+        # Values should be ordered
+        assert result[0] < result[1] < result[2]
+
+    def test_numerical_stability(self):
+        # Large values shouldn't overflow
+        a = np.array([1000.0, 1001.0, 1002.0])
+        result = softmax(a.copy())
+        assert abs(result.sum() - 1.0) < 1e-10
+
+    def test_multithreaded(self):
+        a = np.array([1.0, 2.0, 3.0, 4.0])
+        result = softmax_mt(a.copy(), n_threads=2)
+        expected = softmax(a.copy())
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestCumsum:
+    def test_basic(self):
+        a = np.array([1.0, 2.0, 3.0, 4.0])
+        result = cumsum(a.copy())
+        np.testing.assert_array_almost_equal(result, [1.0, 3.0, 6.0, 10.0])
+
+    def test_matches_numpy(self):
+        rng = np.random.default_rng(42)
+        a = rng.random(1000)
+        result = cumsum(a.copy())
+        expected = np.cumsum(a)
+        np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestRollingSum:
+    def test_basic(self):
+        a = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = rolling_sum(a, 3)
+        # Window 3: [1], [1+2], [1+2+3], [2+3+4], [3+4+5]
+        np.testing.assert_array_almost_equal(result, [1.0, 3.0, 6.0, 9.0, 12.0])
+
+    def test_window_1(self):
+        a = np.array([1.0, 2.0, 3.0])
+        result = rolling_sum(a, 1)
+        np.testing.assert_array_almost_equal(result, a)
+
+
+class TestVariance:
+    def test_basic(self):
+        a = np.array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0])
+        result = variance(a)
+        # Mean=5, variance=4
+        assert abs(result - 4.0) < 1e-10
+
+    def test_matches_numpy(self):
+        rng = np.random.default_rng(42)
+        a = rng.random(1000)
+        result = variance(a)
+        expected = float(np.var(a))  # Population variance
+        assert abs(result - expected) < 1e-10
+
+
+class TestHistogram:
+    def test_basic(self):
+        a = np.array([0.1, 0.3, 0.5, 0.7, 0.9, 1.0])
+        result = histogram(a, 5, 0.0, 1.0)
+        np.testing.assert_array_almost_equal(result, [1.0, 1.0, 1.0, 1.0, 2.0])
+
+    def test_uniform(self):
+        # All values in same bin
+        a = np.array([0.5, 0.5, 0.5])
+        result = histogram(a, 10, 0.0, 1.0)
+        assert result[5] == 3.0
 
 
 if __name__ == "__main__":
