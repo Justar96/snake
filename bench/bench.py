@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark suite for zigops.
+Benchmark suite for snake.
 
 Compares:
 - Pure Python loop (slow baseline)
@@ -45,9 +45,9 @@ def np_dot_sum_sq(a: np.ndarray) -> float:
 
 def benchmark_sum_sq(n: int = 10_000_000, rigorous: bool = False):
     """Run sum of squares benchmark."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Sum of Squares Benchmark (n = {n:,})")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Generate test data
     rng = np.random.default_rng(42)
@@ -124,14 +124,14 @@ def benchmark_sum_sq(n: int = 10_000_000, rigorous: bool = False):
     for name, t in results.items():
         vs_py = py_time / t if t > 0 else float("inf")
         vs_np = np_time / t if t > 0 else float("inf")
-        print(f"{name:<20} {t*1000:>10.3f}ms {vs_py:>10.1f}× {vs_np:>10.2f}×")
+        print(f"{name:<20} {t * 1000:>10.3f}ms {vs_py:>10.1f}× {vs_np:>10.2f}×")
 
 
 def benchmark_dot(n: int = 10_000_000, rigorous: bool = False):
     """Run dot product benchmark."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Dot Product Benchmark (n = {n:,})")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     rng = np.random.default_rng(42)
     a = rng.random(n, dtype=np.float64)
@@ -160,15 +160,15 @@ def benchmark_dot(n: int = 10_000_000, rigorous: bool = False):
 
     print(f"\n{'Method':<20} {'Time (ms)':<12} {'vs NumPy':<12}")
     print("-" * 44)
-    print(f"{'numpy_dot':<20} {np_time*1000:>10.3f}ms {1.0:>10.2f}×")
-    print(f"{'zig_dot':<20} {zig_time*1000:>10.3f}ms {np_time/zig_time:>10.2f}×")
+    print(f"{'numpy_dot':<20} {np_time * 1000:>10.3f}ms {1.0:>10.2f}×")
+    print(f"{'zig_dot':<20} {zig_time * 1000:>10.3f}ms {np_time / zig_time:>10.2f}×")
 
 
 def benchmark_argmax(n: int = 10_000_000, rigorous: bool = False):
     """Run argmax benchmark."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Argmax Benchmark (n = {n:,})")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     rng = np.random.default_rng(42)
     a = rng.random(n, dtype=np.float64)
@@ -196,29 +196,31 @@ def benchmark_argmax(n: int = 10_000_000, rigorous: bool = False):
 
     print(f"\n{'Method':<20} {'Time (ms)':<12} {'vs NumPy':<12}")
     print("-" * 44)
-    print(f"{'numpy_argmax':<20} {np_time*1000:>10.3f}ms {1.0:>10.2f}×")
-    print(f"{'zig_argmax':<20} {zig_time*1000:>10.3f}ms {np_time/zig_time:>10.2f}×")
+    print(f"{'numpy_argmax':<20} {np_time * 1000:>10.3f}ms {1.0:>10.2f}×")
+    print(f"{'zig_argmax':<20} {zig_time * 1000:>10.3f}ms {np_time / zig_time:>10.2f}×")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="zigops benchmarks")
+    parser = argparse.ArgumentParser(description="snake benchmarks")
     parser.add_argument("-n", type=int, default=10_000_000, help="Array size")
     parser.add_argument("--rigorous", action="store_true", help="More iterations")
     args = parser.parse_args()
 
     print("=" * 60)
-    print("zigops Benchmark Suite")
+    print("snake Benchmark Suite")
     print("=" * 60)
     print(f"NumPy version: {np.__version__}")
-    print(f"Array size: {args.n:,} float64 elements ({args.n * 8 / 1024 / 1024:.1f} MB)")
+    print(
+        f"Array size: {args.n:,} float64 elements ({args.n * 8 / 1024 / 1024:.1f} MB)"
+    )
 
     benchmark_sum_sq(args.n, args.rigorous)
     benchmark_dot(args.n, args.rigorous)
     benchmark_argmax(args.n, args.rigorous)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Done!")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 if __name__ == "__main__":

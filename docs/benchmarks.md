@@ -2,7 +2,7 @@
 
 ## Goals
 
-Establish **clear, measurable, and fair** performance targets that demonstrate zigops' value proposition.
+Establish **clear, measurable, and fair** performance targets that demonstrate snake's value proposition.
 
 ## Baselines
 
@@ -130,7 +130,7 @@ np.show_config()
 
 ```
 ============================================================
-zigops Benchmark Results
+snake Benchmark Results
 ============================================================
 System: Intel Core i7-12700K, 32GB DDR4-3200
 NumPy: 1.26.4 (OpenBLAS)

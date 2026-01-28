@@ -45,7 +45,7 @@ python bench/bench.py
 ```
 snake/
 ├── build.zig        # Zig build config
-├── src/zigops.zig   # Core Zig kernels
+├── src/snake.zig    # Core Zig kernels
 ├── python/snake/    # Python bindings
 ├── bench/           # Benchmarks
 ├── docs/            # Architecture & roadmap

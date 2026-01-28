@@ -1,5 +1,5 @@
 """
-Unit tests for zigops Python bindings.
+Unit tests for snake Python bindings.
 """
 
 import numpy as np
@@ -68,7 +68,7 @@ class TestDot:
         a = np.array([1.0, 2.0, 3.0, 4.0])
         b = np.array([2.0, 3.0, 4.0, 5.0])
         result = dot(a, b)
-        expected = 1*2 + 2*3 + 3*4 + 4*5  # 40
+        expected = 1 * 2 + 2 * 3 + 3 * 4 + 4 * 5  # 40
         assert abs(result - expected) < 1e-10
 
     def test_matches_numpy(self):

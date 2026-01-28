@@ -2,7 +2,7 @@
 
 ## Overview
 
-zigops provides high-performance numeric kernels written in Zig, callable from Python via ctypes. The design prioritizes:
+snake provides high-performance numeric kernels written in Zig, callable from Python via ctypes. The design prioritizes:
 
 1. **Zero-copy buffer access** — NumPy arrays are accessed directly via pointer
 2. **Explicit SIMD** — Uses Zig's `@Vector` for guaranteed vectorization
@@ -22,7 +22,7 @@ zigops provides high-performance numeric kernels written in Zig, callable from P
                           │ (releases GIL)
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   zigops/_core.py                            │
+│                   snake/_core.py                            │
 │  • Locates shared library                                   │
 │  • Defines function signatures                              │
 │  • Converts arrays to (ptr, len) tuples                     │
@@ -30,7 +30,7 @@ zigops provides high-performance numeric kernels written in Zig, callable from P
                           │ C ABI call
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   libzigops.so                               │
+│                   libsnake.so                               │
 │  • sum_sq_f64(ptr, len) -> f64                              │
 │  • sum_sq_f64_mt(ptr, len, n_threads) -> f64                │
 │  • dot_f64(a, b, len) -> f64                                │

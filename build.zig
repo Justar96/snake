@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
         .name = "snake",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/zigops.zig"),
+            .root_source_file = b.path("src/snake.zig"),
             .target = target,
             .optimize = optimize,
         }),
@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
     // Unit tests
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/zigops.zig"),
+            .root_source_file = b.path("src/snake.zig"),
             .target = target,
             .optimize = optimize,
         }),
