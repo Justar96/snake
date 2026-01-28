@@ -12,7 +12,7 @@ const VecLen = simd.VecF64Len;
 pub const MAX_THREADS: u32 = 64;
 
 /// Minimum array size for multi-threading (below this, single-threaded is faster)
-pub const MT_THRESHOLD: usize = 1_000_000;
+pub const MT_THRESHOLD: usize = 250_000;
 
 // =============================================================================
 // Multi-Threaded Kernels
