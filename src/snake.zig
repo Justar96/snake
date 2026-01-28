@@ -27,6 +27,20 @@ pub const kernels = @import("kernels/kernels.zig");
 pub const threading = @import("threading/threading.zig");
 
 // =============================================================================
+// C ABI Exports - SIMD Introspection
+// =============================================================================
+
+/// SIMD lane count for f64 vectors (compile-time constant).
+pub export fn simd_f64_lanes() u32 {
+    return @intCast(simd.VecF64Len);
+}
+
+/// SIMD lane count for f32 vectors (compile-time constant).
+pub export fn simd_f32_lanes() u32 {
+    return @intCast(simd.VecF32Len);
+}
+
+// =============================================================================
 // C ABI Exports - Reduction Kernels
 // =============================================================================
 

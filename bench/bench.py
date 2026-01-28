@@ -47,6 +47,7 @@ from snake import (
     rolling_sum,
     saxpy,
     scale,
+    simd_lanes,
     softmax,
     softmax_mt,
     sum_sq,
@@ -594,6 +595,8 @@ def main():
 
     banner("🐍 snake Benchmark Suite", f"NumPy {np.__version__}")
     print()
+    f64_lanes, f32_lanes = simd_lanes()
+    info_line("SIMD lanes", f"f64={f64_lanes} f32={f32_lanes}")
     info_line("Array size", f"{format_number(args.n)} float64 elements")
     info_line("Memory", format_size_mb(args.n * 8))
     info_line("Mode", "rigorous" if args.rigorous else "quick")

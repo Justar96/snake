@@ -33,6 +33,12 @@ def _find_library() -> Path:
 _lib = ctypes.CDLL(str(_find_library()))
 
 # Function signatures
+_lib.simd_f64_lanes.argtypes = []
+_lib.simd_f64_lanes.restype = ctypes.c_uint32
+
+_lib.simd_f32_lanes.argtypes = []
+_lib.simd_f32_lanes.restype = ctypes.c_uint32
+
 _lib.sum_sq_f64.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
 _lib.sum_sq_f64.restype = ctypes.c_double
 
@@ -126,6 +132,11 @@ def _as_f64_ptr(arr: NDArray) -> tuple:
     arr = np.ascontiguousarray(arr, dtype=np.float64)
     ptr = arr.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
     return ptr, arr.size, arr
+
+
+def simd_lanes() -> tuple[int, int]:
+    """Return SIMD lane counts (f64 lanes, f32 lanes) for this build."""
+    return int(_lib.simd_f64_lanes()), int(_lib.simd_f32_lanes())
 
 
 def sum_sq(a: NDArray) -> float:

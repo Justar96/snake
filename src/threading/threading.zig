@@ -1,7 +1,8 @@
 const std = @import("std");
 const simd = @import("../simd/simd.zig");
 const activations = @import("../kernels/activations.zig");
-const Vec4 = simd.Vec4;
+const Vec = simd.VecF64;
+const VecLen = simd.VecF64Len;
 
 // =============================================================================
 // Threading Configuration
@@ -24,8 +25,8 @@ fn sumSqWorker(ptr: [*]const f64, start: usize, end: usize, out: *f64) void {
 fn softmaxMaxWorker(ptr: [*]const f64, start: usize, end: usize, out: *f64) void {
     var max_val: f64 = ptr[start];
     var i: usize = start + 1;
-    while (i + 4 <= end) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
+    while (i + VecLen <= end) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
         const chunk_max = @reduce(.Max, v);
         if (chunk_max > max_val) max_val = chunk_max;
     }
@@ -42,13 +43,13 @@ fn softmaxExpSumWorker(
     max_val: f64,
     out: *f64,
 ) void {
-    var sum_vec: Vec4 = @splat(0.0);
-    const max_splat: Vec4 = @splat(max_val);
+    var sum_vec: Vec = @splat(0.0);
+    const max_splat: Vec = @splat(max_val);
     var i: usize = start;
-    while (i + 4 <= end) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
+    while (i + VecLen <= end) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
         const exp_v = @exp(v - max_splat);
-        ptr[i..][0..4].* = exp_v;
+        ptr[i..][0..VecLen].* = exp_v;
         sum_vec += exp_v;
     }
     var sum = @reduce(.Add, sum_vec);
@@ -65,11 +66,11 @@ fn softmaxScaleWorker(
     end: usize,
     inv_sum: f64,
 ) void {
-    const inv_sum_vec: Vec4 = @splat(inv_sum);
+    const inv_sum_vec: Vec = @splat(inv_sum);
     var i: usize = start;
-    while (i + 4 <= end) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        ptr[i..][0..4].* = v * inv_sum_vec;
+    while (i + VecLen <= end) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
+        ptr[i..][0..VecLen].* = v * inv_sum_vec;
     }
     while (i < end) : (i += 1) {
         ptr[i] *= inv_sum;

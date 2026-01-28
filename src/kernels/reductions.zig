@@ -1,7 +1,8 @@
 const std = @import("std");
 const simd = @import("../simd/simd.zig");
 const reduce = simd.reduce;
-const Vec4 = simd.Vec4;
+const Vec = simd.VecF64;
+const VecLen = simd.VecF64Len;
 
 // =============================================================================
 // Reduction Kernels
@@ -28,10 +29,8 @@ pub fn argmax(ptr: [*]const f64, len: usize) usize {
     if (len == 0) return 0;
     if (len == 1) return 0;
 
-    const IdxVec4 = @Vector(4, usize);
-
     // Handle small arrays without SIMD
-    if (len < 4) {
+    if (len < VecLen) {
         var max_idx: usize = 0;
         var max_val: f64 = ptr[0];
         for (1..len) |idx| {
@@ -43,15 +42,23 @@ pub fn argmax(ptr: [*]const f64, len: usize) usize {
         return max_idx;
     }
 
-    // Initialize with first 4 elements
-    var max_vec: Vec4 = ptr[0..4].*;
-    var idx_vec: IdxVec4 = .{ 0, 1, 2, 3 };
-    var i: usize = 4;
+    const IdxVec = @Vector(VecLen, usize);
+
+    // Initialize with first VecLen elements
+    var max_vec: Vec = ptr[0..VecLen].*;
+    var idx_vec: IdxVec = undefined;
+    inline for (0..VecLen) |lane| {
+        idx_vec[lane] = lane;
+    }
+    var i: usize = VecLen;
 
     // SIMD loop: track both max values and indices in parallel
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        const new_idx: IdxVec4 = .{ i, i + 1, i + 2, i + 3 };
+    while (i + VecLen <= len) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
+        var new_idx: IdxVec = undefined;
+        inline for (0..VecLen) |lane| {
+            new_idx[lane] = i + lane;
+        }
 
         // Compare: which lanes have larger values?
         const mask = v > max_vec;
@@ -64,7 +71,7 @@ pub fn argmax(ptr: [*]const f64, len: usize) usize {
     // Horizontal reduction: find the lane with the maximum
     var max_val = max_vec[0];
     var max_idx = idx_vec[0];
-    inline for (1..4) |lane| {
+    inline for (1..VecLen) |lane| {
         if (max_vec[lane] > max_val) {
             max_val = max_vec[lane];
             max_idx = idx_vec[lane];
@@ -95,10 +102,10 @@ pub fn variance(ptr: [*]const f64, len: usize) f64 {
 
     // Pass 2: Compute sum of squared differences using SIMD
     var i: usize = 0;
-    var sq_diff_vec: Vec4 = @splat(0.0);
-    const mean_vec: Vec4 = @splat(mean);
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
+    var sq_diff_vec: Vec = @splat(0.0);
+    const mean_vec: Vec = @splat(mean);
+    while (i + VecLen <= len) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
         const diff = v - mean_vec;
         sq_diff_vec += diff * diff;
     }

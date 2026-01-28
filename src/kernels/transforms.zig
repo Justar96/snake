@@ -1,6 +1,7 @@
 const std = @import("std");
 const simd = @import("../simd/simd.zig");
-const Vec4 = simd.Vec4;
+const Vec = simd.VecF64;
+const VecLen = simd.VecF64Len;
 
 // =============================================================================
 // Transform Kernels (in-place mutations)
@@ -10,13 +11,13 @@ const Vec4 = simd.Vec4;
 /// Uses SIMD for vectorized min/max operations
 pub fn clip(ptr: [*]f64, len: usize, lo: f64, hi: f64) void {
     var i: usize = 0;
-    const lo_vec: Vec4 = @splat(lo);
-    const hi_vec: Vec4 = @splat(hi);
+    const lo_vec: Vec = @splat(lo);
+    const hi_vec: Vec = @splat(hi);
 
-    // SIMD loop: process 4 elements at a time
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        ptr[i..][0..4].* = @max(lo_vec, @min(hi_vec, v));
+    // SIMD loop
+    while (i + VecLen <= len) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
+        ptr[i..][0..VecLen].* = @max(lo_vec, @min(hi_vec, v));
     }
 
     // Scalar tail
@@ -37,11 +38,11 @@ pub fn normalize(ptr: [*]f64, len: usize) void {
 
     // Scale by inverse norm using SIMD
     var i: usize = 0;
-    const inv_vec: Vec4 = @splat(inv_norm);
+    const inv_vec: Vec = @splat(inv_norm);
 
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        ptr[i..][0..4].* = v * inv_vec;
+    while (i + VecLen <= len) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
+        ptr[i..][0..VecLen].* = v * inv_vec;
     }
 
     // Scalar tail
@@ -53,11 +54,11 @@ pub fn normalize(ptr: [*]f64, len: usize) void {
 /// Multiply array by scalar in-place: x[i] *= s
 pub fn scale(ptr: [*]f64, len: usize, scalar: f64) void {
     var i: usize = 0;
-    const s_vec: Vec4 = @splat(scalar);
+    const s_vec: Vec = @splat(scalar);
 
-    while (i + 4 <= len) : (i += 4) {
-        const v: Vec4 = ptr[i..][0..4].*;
-        ptr[i..][0..4].* = v * s_vec;
+    while (i + VecLen <= len) : (i += VecLen) {
+        const v: Vec = ptr[i..][0..VecLen].*;
+        ptr[i..][0..VecLen].* = v * s_vec;
     }
 
     while (i < len) : (i += 1) {
@@ -68,12 +69,12 @@ pub fn scale(ptr: [*]f64, len: usize, scalar: f64) void {
 /// SAXPY: a[i] += scalar * b[i]
 pub fn saxpy(a_ptr: [*]f64, b_ptr: [*]const f64, len: usize, scalar: f64) void {
     var i: usize = 0;
-    const s_vec: Vec4 = @splat(scalar);
+    const s_vec: Vec = @splat(scalar);
 
-    while (i + 4 <= len) : (i += 4) {
-        const va: Vec4 = a_ptr[i..][0..4].*;
-        const vb: Vec4 = b_ptr[i..][0..4].*;
-        a_ptr[i..][0..4].* = va + s_vec * vb;
+    while (i + VecLen <= len) : (i += VecLen) {
+        const va: Vec = a_ptr[i..][0..VecLen].*;
+        const vb: Vec = b_ptr[i..][0..VecLen].*;
+        a_ptr[i..][0..VecLen].* = va + s_vec * vb;
     }
 
     while (i < len) : (i += 1) {
