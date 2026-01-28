@@ -48,25 +48,28 @@ measurable and regression-safe.
 
 ### Benchmarks
 - `bench/bench.py` includes all Phase 1 kernels
-- Latest results (10M elements, vs NumPy):
-  - **sum_sq**: 1.31× faster (180× vs pure Python)
-  - **sum_sq_mt**: 1.53× faster (multi-threaded)
-  - **dot**: 1.26× faster
-  - **normalize**: 4.73× faster
-  - **scale**: 1.54× faster
-  - **saxpy**: 1.72× faster
-  - **gelu**: 7.14× faster
-  - **cumsum**: 2.08× faster
-  - **rolling_sum**: 7.90× faster
-- **variance**: 3.94× faster
-- **histogram**: 6.63× faster
-- **relu**: ~parity with NumPy
-- **argmax**, **softmax**: SIMD/unrolled optimizations applied; re-benchmark for parity
-  (see `docs/argmax_softmax_optimizations.md`)
+- Latest quick run (January 28, 2026, this machine, NumPy 2.4.1):
+  - **sum_sq**: 0.57×
+  - **sum_sq_mt**: 0.53×
+  - **dot**: 0.75×
+  - **argmax**: 0.87×
+  - **normalize**: 2.74×
+  - **scale**: 0.95×
+  - **saxpy**: 1.69×
+  - **relu**: 1.60×
+  - **gelu**: 1.86×
+  - **softmax**: 0.33×
+  - **softmax_mt**: 0.35× (2M elements)
+  - **cumsum**: 3.22×
+  - **rolling_sum**: 3.73×
+  - **variance**: 3.79×
+  - **histogram**: 3.50×
+- Softmax scaling sweep (200k → 10M): MT has no crossover yet (0.31×–0.43×).
+- argmax/softmax SIMD + unrolling applied; see `docs/argmax_softmax_optimizations.md`.
 
 ### Tests
-- Zig unit tests for each kernel (25 tests)
-- Python parity tests vs NumPy (41 tests)
+- Zig unit tests for each kernel
+- Python parity tests vs NumPy
 - Edge cases: empty, single element, NaN/Inf behavior
 
 ---
@@ -90,7 +93,7 @@ src/
 │   ├── prefix.zig         # cumsum, rolling_sum
 │   └── histogram.zig      # histogram
 └── threading/
-    └── threading.zig      # Multi-threaded sum_sq_mt
+    └── threading.zig      # Multi-threaded sum_sq_mt, softmax_mt
 ```
 
 ### Improvements
@@ -100,8 +103,8 @@ src/
 - Full SIMD vectorization for all applicable kernels
 
 ### Tests
-- All 25 Zig tests pass across modules
-- All 41 Python tests pass with refactored library
+- Zig module tests (reductions/transforms/activations/prefix/histogram/threading)
+- Python parity tests for Phase 1 kernels
 
 ---
 

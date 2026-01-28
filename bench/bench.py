@@ -19,9 +19,17 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
+
+# Ensure NumPy uses a single thread for fair single-thread comparisons.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 import numpy as np
 
@@ -40,6 +48,7 @@ from snake import (
     saxpy,
     scale,
     softmax,
+    softmax_mt,
     sum_sq,
     sum_sq_mt,
     variance,
@@ -377,12 +386,14 @@ def benchmark_phase1(n: int = 1_000_000, rigorous: bool = False):
     rng = np.random.default_rng(42)
     n_core = min(n, 1_000_000)
     n_softmax = min(n, 200_000)
+    n_softmax_mt = min(n, 2_000_000)
     window = 64
     n_bins = 128
 
     a = rng.standard_normal(n_core, dtype=np.float64)
     b = rng.standard_normal(n_core, dtype=np.float64)
     softmax_input = rng.standard_normal(n_softmax, dtype=np.float64)
+    softmax_input_mt = rng.standard_normal(n_softmax_mt, dtype=np.float64)
     hist_input = rng.random(n_core, dtype=np.float64)
 
     iterations = 50 if rigorous else 10
@@ -399,6 +410,14 @@ def benchmark_phase1(n: int = 1_000_000, rigorous: bool = False):
             "softmax",
             np.allclose(
                 softmax(softmax_input.copy()),
+                np_softmax(softmax_input.copy()),
+                rtol=1e-6,
+            ),
+        ),
+        (
+            "softmax_mt",
+            np.allclose(
+                softmax_mt(softmax_input.copy(), n_threads=2),
                 np_softmax(softmax_input.copy()),
                 rtol=1e-6,
             ),
@@ -426,6 +445,10 @@ def benchmark_phase1(n: int = 1_000_000, rigorous: bool = False):
 
     info_line("Core array size", format_number(n_core))
     info_line("Softmax array size", format_number(n_softmax))
+    if n_softmax_mt >= 1_000_000:
+        info_line("Softmax MT size", format_number(n_softmax_mt))
+    else:
+        info_line("Softmax MT size", f"{format_number(n_softmax_mt)} (skipped)")
     info_line("Rolling window", str(window))
     info_line("Histogram bins", str(n_bins))
     print()
@@ -466,6 +489,11 @@ def benchmark_phase1(n: int = 1_000_000, rigorous: bool = False):
     zig_time = _bench_inplace(softmax_input, heavy_iters, softmax)
     rows.append(("softmax", np_time, zig_time))
 
+    if n_softmax_mt >= 1_000_000:
+        np_time = _bench_inplace(softmax_input_mt, heavy_iters, np_softmax)
+        zig_time = _bench_inplace(softmax_input_mt, heavy_iters, softmax_mt)
+        rows.append(("softmax_mt", np_time, zig_time))
+
     np_time = _bench_inplace(a, iterations, np_cumsum_inplace)
     zig_time = _bench_inplace(a, iterations, cumsum)
     rows.append(("cumsum", np_time, zig_time))
@@ -494,12 +522,73 @@ def benchmark_phase1(n: int = 1_000_000, rigorous: bool = False):
         )
 
 
+def _softmax_iters_for_size(n: int, rigorous: bool) -> int:
+    if rigorous:
+        if n <= 1_000_000:
+            return 10
+        if n <= 2_000_000:
+            return 6
+        if n <= 5_000_000:
+            return 4
+        return 3
+    if n <= 1_000_000:
+        return 5
+    if n <= 2_000_000:
+        return 3
+    if n <= 5_000_000:
+        return 2
+    return 1
+
+
+def benchmark_softmax_scale(rigorous: bool = False):
+    """Sweep softmax sizes to find MT crossover."""
+    section_header("Softmax Scaling", "size sweep (single vs MT)")
+    sizes = [200_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000]
+    rng = np.random.default_rng(42)
+
+    table = Table(
+        [
+            ("Size", 10, "right"),
+            ("NumPy", 12, "right"),
+            ("Zig", 12, "right"),
+            ("Zig MT", 12, "right"),
+            ("1T", 8, "right"),
+            ("MT", 8, "right"),
+        ]
+    )
+    table.print_header()
+
+    for n in sizes:
+        iterations = _softmax_iters_for_size(n, rigorous)
+        data = rng.standard_normal(n, dtype=np.float64)
+
+        np_time = _bench_inplace(data, iterations, np_softmax)
+        zig_time = _bench_inplace(data, iterations, softmax)
+        zig_mt_time = _bench_inplace(data, iterations, softmax_mt)
+
+        table.print_row(
+            [
+                format_number(n),
+                format_time_ms(np_time),
+                format_time_ms(zig_time),
+                format_time_ms(zig_mt_time),
+                format_speedup(np_time / zig_time),
+                format_speedup(np_time / zig_mt_time),
+            ]
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="snake benchmarks")
     parser.add_argument("-n", type=int, default=10_000_000, help="Array size")
     parser.add_argument("--rigorous", action="store_true", help="More iterations")
     parser.add_argument(
         "--skip-phase1", action="store_true", help="Skip Phase 1 kernel benchmarks"
+    )
+    parser.add_argument(
+        "--softmax-scale",
+        action="store_true",
+        help="Run softmax size sweep (200k -> 10M)",
     )
     args = parser.parse_args()
 
@@ -514,6 +603,8 @@ def main():
     benchmark_argmax(args.n, args.rigorous)
     if not args.skip_phase1:
         benchmark_phase1(args.n, args.rigorous)
+    if args.softmax_scale:
+        benchmark_softmax_scale(args.rigorous)
 
     completion_banner("Benchmark complete!")
 
